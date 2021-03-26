@@ -1,8 +1,24 @@
 const express = require("express")
 const Task = require("../models/task")
 const auth = require("../middleware/auth")
+const multer = require("multer")
+const sharp = require("sharp")
+const { findByIdAndUpdate } = require("../models/task")
 
 const router = express.Router()
+
+var upload = multer({
+    limits: {
+        fileSize: 1000000
+    },
+    fileFilter(req, file, cb) {
+        if(!file.originalname.match("\.(jpg|jpeg|png)$")) {
+            return cb(new Error("File must be an image!"))
+        }
+
+        cb(undefined, true)
+    }
+})
 
 router.post("/tasks", auth, async (req, res) => {
     // var task = new Task(req.body)
@@ -17,6 +33,26 @@ router.post("/tasks", auth, async (req, res) => {
     }
     catch(e) {
         res.status(400).send(e)
+    }
+})
+
+router.post("/tasks/:id/image", auth, upload.single("image"), async (req, res) => {
+    try {
+        var buff = await sharp(req.file.buffer).resize({width: 250, height: 250}).png().toBuffer()
+        var task = await Task.findById(req.params.id)
+
+        if(!task) {
+            res.status(404).send()
+        }
+
+        task.image = buff
+        await task.save()
+
+        res.send(task)
+    }
+    catch(e) {
+        console.log(e)
+        res.status(500).send(e)
     }
 })
 
@@ -71,6 +107,23 @@ router.get("/tasks/:id", auth, async (req, res) => {
     }
     catch(e) {
         res.status(500).send(e)
+    }
+})
+
+router.get("/tasks/:id/image", auth, async (req, res) => {
+    try {
+        var task = await Task.findById(req.params.id)
+
+        if(!task || !task.image) {
+            throw new Error("Image not found!")
+        }
+
+        res.set("Content-type", "image/png")
+        res.send(task.image)
+    }
+    catch(error) {
+        console.log(error)
+        res.status(404).send({error})
     }
 })
 
